@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система управління клієнтами</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>Система управління клієнтами</h1>
+    </div>
+
+    <div class="container">
+        <div class="controls">
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Пошук клієнтів...">
+            </div>
+            <div class="sort-controls">
+                <select id="sortBy">
+                    <option value="">Сортувати за...</option>
+                    <option value="name">Ім'я</option>
+                    <option value="created_at">Дата додавання</option>
+                    <option value="total_spent">Сума витрат</option>
+                </select>
+                <select id="sortOrder">
+                    <option value="asc">За зростанням</option>
+                    <option value="desc">За спаданням</option>
+                </select>
+                <button class="btn btn-primary" onclick="applySort()">Сортувати</button>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="openAddModal()">Додати клієнта</button>
+
+        <div class="clients-grid" id="clientsGrid">
+            <!-- Тут будуть картки клієнтів -->
+        </div>
+    </div>
+
+    <!-- Модальне вікно для додавання/редагування клієнта -->
+    <div id="clientModal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Додати клієнта</h2>
+            <form id="clientForm">
+                <input type="hidden" id="clientId">
+                <div class="form-group">
+                    <label for="name">Ім'я:</label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Телефон:</label>
+                    <input type="tel" id="phone">
+                </div>
+                <div class="form-group">
+                    <label for="address">Адреса:</label>
+                    <input type="text" id="address">
+                </div>
+                <div class="form-group">
+                    <label for="birth_date">Дата народження:</label>
+                    <input type="date" id="birth_date">
+                </div>
+                <div class="form-group">
+                    <label for="notes">Нотатки:</label>
+                    <textarea id="notes" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="total_spent">Всього витрачено:</label>
+                    <input type="number" id="total_spent" step="0.01" min="0">
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn" onclick="closeModal()">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentSortBy = '';
+        let currentSortOrder = 'asc';
+
+        // Функції для роботи з модальним вікном
+        function openAddModal() {
+            document.getElementById('modalTitle').textContent = 'Додати клієнта';
+            document.getElementById('clientForm').reset();
+            document.getElementById('clientId').value = '';
+            document.getElementById('clientModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('clientModal').style.display = 'none';
+        }
+
+        // Функції для роботи з API
+        async function loadClients() {
+            try {
+                console.log('Завантаження клієнтів...');
+                const url = `/clients/${currentSortBy ? `?sort_by=${currentSortBy}&sort_order=${currentSortOrder}` : ''}`;
+                console.log('URL запиту:', url);
+                
+                const response = await fetch(url);
+                console.log('Відповідь отримана:', response);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const clients = await response.json();
+                console.log('Дані клієнтів:', clients);
+                displayClients(Array.isArray(clients) ? clients : []);
+            } catch (error) {
+                console.error('Помилка при завантаженні клієнтів:', error);
+                document.getElementById('clientsGrid').innerHTML = 
+                    '<p>Помилка при завантаженні клієнтів. Спробуйте оновити сторінку.</p>';
+            }
+        }
+
+        function displayClients(clients) {
+            console.log('Відображення клієнтів:', clients);
+            const grid = document.getElementById('clientsGrid');
+            grid.innerHTML = '';
+            
+            if (!Array.isArray(clients)) {
+                console.error('Отримані дані не є масивом:', clients);
+                return;
+            }
+
+            if (clients.length === 0) {
+                console.log('Список клієнтів порожній');
+                grid.innerHTML = '<p>Немає клієнтів для відображення</p>';
+                return;
+            }
+            
+            clients.forEach(client => {
+                console.log('Створення картки для клієнта:', client);
+                const card = document.createElement('div');
+                card.className = 'client-card';
+                const birthDate = client.birth_date ? new Date(client.birth_date).toLocaleDateString('uk-UA') : 'Не вказано';
+                card.innerHTML = `
+                    <h3>${client.name}</h3>
+                    <div class="client-info">
+                        <p>Email: ${client.email}</p>
+                        <p>Телефон: ${client.phone || 'Не вказано'}</p>
+                        <p>Адреса: ${client.address || 'Не вказано'}</p>
+                        <p>Дата народження: ${birthDate}</p>
+                        <p>Нотатки: ${client.notes || 'Немає'}</p>
+                        <p>Всього витрачено: ${client.total_spent?.toFixed(2) || '0.00'} грн</p>
+                    </div>
+                    <div class="actions">
+                        <button class="btn btn-primary" onclick="editClient(${client.id})">Редагувати</button>
+                        <button class="btn btn-danger" onclick="deleteClient(${client.id})">Видалити</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        async function saveClient(event) {
+            event.preventDefault();
+            const clientId = document.getElementById('clientId').value;
+            
+            // Підготовка даних з правильними типами
+            const birthDateValue = document.getElementById('birth_date').value;
+            const totalSpentValue = document.getElementById('total_spent').value;
+            
+            const clientData = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                phone: document.getElementById('phone').value || null,
+                address: document.getElementById('address').value || null,
+                birth_date: birthDateValue ? new Date(birthDateValue).toISOString() : null,
+                notes: document.getElementById('notes').value || null,
+                total_spent: totalSpentValue ? parseFloat(totalSpentValue) : 0
+            };
+
+            try {
+                console.log('Відправка даних:', clientData);
+                const response = await fetch(clientId ? `/clients/${clientId}` : '/clients/', {
+                    method: clientId ? 'PUT' : 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(clientData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Помилка при збереженні клієнта');
+                }
+
+                const savedClient = await response.json();
+                console.log('Клієнт збережений:', savedClient);
+                closeModal();
+                loadClients();
+            } catch (error) {
+                console.error('Помилка при збереженні клієнта:', error);
+                alert('Помилка при збереженні клієнта: ' + error.message);
+            }
+        }
+
+        async function deleteClient(id) {
+            if (confirm('Ви впевнені, що хочете видалити цього клієнта?')) {
+                try {
+                    await fetch(`/clients/${id}`, { method: 'DELETE' });
+                    loadClients();
+                } catch (error) {
+                    console.error('Помилка при видаленні клієнта:', error);
+                }
+            }
+        }
+
+        async function editClient(id) {
+            try {
+                const response = await fetch(`/clients/${id}`);
+                const client = await response.json();
+                document.getElementById('modalTitle').textContent = 'Редагувати клієнта';
+                document.getElementById('clientId').value = client.id;
+                document.getElementById('name').value = client.name;
+                document.getElementById('email').value = client.email;
+                document.getElementById('phone').value = client.phone || '';
+                document.getElementById('address').value = client.address || '';
+                document.getElementById('birth_date').value = client.birth_date ? client.birth_date.split('T')[0] : '';
+                document.getElementById('notes').value = client.notes || '';
+                document.getElementById('total_spent').value = client.total_spent || 0;
+                document.getElementById('clientModal').style.display = 'block';
+            } catch (error) {
+                console.error('Помилка при завантаженні даних клієнта:', error);
+            }
+        }
+
+        function applySort() {
+            currentSortBy = document.getElementById('sortBy').value;
+            currentSortOrder = document.getElementById('sortOrder').value;
+            loadClients();
+        }
+
+        // Пошук клієнтів
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const cards = document.querySelectorAll('.client-card');
+            
+            cards.forEach(card => {
+                const text = card.textContent.toLowerCase();
+                card.style.display = text.includes(searchTerm) ? 'block' : 'none';
+            });
+        });
+
+        // Ініціалізація
+        document.getElementById('clientForm').addEventListener('submit', saveClient);
+        loadClients();
+    </script>
+</body>
+</html> 
